@@ -9,7 +9,7 @@
 
 A modified version of Fluent
 github.com/discoart/FluentPlus | dsc.gg/hydrahub
-
+Nami2s
 ]]
 
 --- button
@@ -3679,6 +3679,11 @@ ElementsTable.Toggle = (function()
 
 	return Element
 end)()
+
+
+
+
+
 ElementsTable.Dropdown = (function()
 	local Element = {}
 	Element.__index = Element
@@ -3830,8 +3835,9 @@ ElementsTable.Dropdown = (function()
 		})
 		table.insert(Library.OpenFrames, DropdownHolderCanvas)
 
-		-- Variável para controlar se deve ignorar cliques externos
-		local IgnoreOutsideClick = false
+		-- Variáveis para controle mobile
+		local LastTouchTime = 0
+		local TouchCooldown = 0.15 -- Cooldown específico para mobile
 
 		local function RecalculateListPosition()
 			local Add = -40
@@ -3863,6 +3869,7 @@ ElementsTable.Dropdown = (function()
 
 		Creator.AddSignal(DropdownInner:GetPropertyChangedSignal("AbsolutePosition"), RecalculateListPosition)
 
+		-- Mouse click (PC)
 		Creator.AddSignal(DropdownInner.MouseButton1Click, function()
 			if Dropdown.Opened then
 				Dropdown:Close()
@@ -3871,8 +3878,18 @@ ElementsTable.Dropdown = (function()
 			Dropdown:Open()
 		end)
 
+		-- Touch input (Mobile) - CORREÇÃO ESPECÍFICA
 		Creator.AddSignal(DropdownInner.InputBegan, function(Input)
 			if Input.UserInputType == Enum.UserInputType.Touch then
+				local CurrentTime = tick()
+				
+				-- Evita múltiplos toques muito rápidos
+				if CurrentTime - LastTouchTime < TouchCooldown then
+					return
+				end
+				
+				LastTouchTime = CurrentTime
+				
 				if Dropdown.Opened then
 					Dropdown:Close()
 					return
@@ -3900,7 +3917,6 @@ ElementsTable.Dropdown = (function()
 				end
 			end
 
-
 			RecalculateListPosition()
 			RecalculateListSize()
 		end)
@@ -3920,39 +3936,56 @@ ElementsTable.Dropdown = (function()
 			end
 		end)
 
-		-- CORREÇÃO: Sistema melhorado de detecção de clique externo
+		-- Sistema de detecção de clique/toque externo MELHORADO
 		Creator.AddSignal(UserInputService.InputBegan, function(Input)
-			-- Ignora se a flag estiver ativa
-			if IgnoreOutsideClick then 
-				return 
+			if not Dropdown.Opened then
+				return
 			end
 
-			if Input.UserInputType == Enum.UserInputType.MouseButton1 or Input.UserInputType == Enum.UserInputType.Touch then
-				-- Não faz nada se o dropdown estiver fechado
-				if not Dropdown.Opened then
-					return
+			local IsTouch = Input.UserInputType == Enum.UserInputType.Touch
+			local IsMouse = Input.UserInputType == Enum.UserInputType.MouseButton1
+
+			if IsTouch or IsMouse then
+				-- Para mobile (Touch), adiciona proteção extra de timing
+				if IsTouch then
+					local CurrentTime = tick()
+					-- Se o toque foi muito recente ao último toque no botão, ignora
+					if CurrentTime - LastTouchTime < TouchCooldown then
+						return
+					end
 				end
 
-				-- Verifica se o clique foi no próprio botão do dropdown
+				-- Pega as coordenadas corretas dependendo do tipo de input
+				local InputX, InputY
+				if IsTouch then
+					-- Para touch, usa a posição do input
+					InputX = Input.Position.X
+					InputY = Input.Position.Y
+				else
+					-- Para mouse, usa Mouse.X e Mouse.Y
+					InputX = Mouse.X
+					InputY = Mouse.Y
+				end
+
+				-- Verifica se o toque/clique foi no botão do dropdown
 				local ButtonAbsPos = DropdownInner.AbsolutePosition
 				local ButtonAbsSize = DropdownInner.AbsoluteSize
 				
-				local ClickedOnButton = Mouse.X >= ButtonAbsPos.X 
-					and Mouse.X <= ButtonAbsPos.X + ButtonAbsSize.X 
-					and Mouse.Y >= ButtonAbsPos.Y 
-					and Mouse.Y <= ButtonAbsPos.Y + ButtonAbsSize.Y
+				local ClickedOnButton = InputX >= ButtonAbsPos.X 
+					and InputX <= ButtonAbsPos.X + ButtonAbsSize.X 
+					and InputY >= ButtonAbsPos.Y 
+					and InputY <= ButtonAbsPos.Y + ButtonAbsSize.Y
 					
-				-- Se clicou no botão, não fecha o dropdown
 				if ClickedOnButton then
 					return
 				end
 				
-				-- Verifica se clicou fora da área do dropdown
+				-- Verifica se clicou/tocou fora da área do dropdown
 				local AbsPos, AbsSize = DropdownHolderFrame.AbsolutePosition, DropdownHolderFrame.AbsoluteSize
-				if Mouse.X < AbsPos.X
-					or Mouse.X > AbsPos.X + AbsSize.X
-					or Mouse.Y < (AbsPos.Y - 20 - 1)
-					or Mouse.Y > AbsPos.Y + AbsSize.Y
+				if InputX < AbsPos.X
+					or InputX > AbsPos.X + AbsSize.X
+					or InputY < (AbsPos.Y - 20 - 1)
+					or InputY > AbsPos.Y + AbsSize.Y
 				then
 					Dropdown:Close()
 				end
@@ -3961,9 +3994,6 @@ ElementsTable.Dropdown = (function()
 
 		local ScrollFrame = self.ScrollFrame
 		function Dropdown:Open()
-			-- Ativa a flag para ignorar cliques externos temporariamente
-			IgnoreOutsideClick = true
-			
 			Dropdown.Opened = true
 			DropdownDisplay.Interactable = Dropdown.Searchable and true or false
 			ScrollFrame.ScrollingEnabled = false
@@ -3981,12 +4011,6 @@ ElementsTable.Dropdown = (function()
 			if Dropdown.Searchable then
 				DropdownDisplay:CaptureFocus()
 			end
-			
-			-- Desativa a flag após um pequeno delay para permitir cliques externos novamente
-			spawn(function()
-				wait(0.1)
-				IgnoreOutsideClick = false
-			end)
 		end
 
 		function Dropdown:Close()
@@ -4292,6 +4316,10 @@ ElementsTable.Dropdown = (function()
 
 	return Element
 end)()
+
+
+
+
 ElementsTable.Paragraph = (function()
 	local Paragraph = {}
 	Paragraph.__index = Paragraph
@@ -6853,10 +6881,6 @@ Creator.AddSignal(UserInputService.InputChanged, function(Input)
 
 		Minimizer.Position = UDim2.fromScale(CurrentX, CurrentY)
 	end
-end)
-
-AddSignal(MinimizeButton.MouseButton1Click, function()
-	Library.Window:Minimize()
 end)
 
 task.wait(0.01)
